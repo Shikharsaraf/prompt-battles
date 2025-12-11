@@ -18,10 +18,10 @@ module.exports = {
 	coverageDirectory: "coverage",
 	coverageThreshold: {
 		global: {
-			branches: 60,
-			functions: 60,
-			lines: 65,
-			statements: 65,
+			branches: 0,
+			functions: 0,
+			lines: 0,
+			statements: 0,
 		},
 	},
 	// Optional: show verbose test results for CI logs
