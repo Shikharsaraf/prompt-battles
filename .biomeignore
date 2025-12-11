@@ -1,0 +1,6 @@
+﻿# local generated
+audit.json
+coverage/
+node_modules/
+dist/
+build/
