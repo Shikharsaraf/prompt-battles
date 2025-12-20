@@ -134,6 +134,7 @@ export default function RoomPage() {
 
     const phaseChannel = supabase
       .channel(`room-phase-${roomId}`)
+
       .on("broadcast", { event: "phase_update" }, (payload) => {
         setBattlePhase(payload.payload.phase);
         setTimeLeft(payload.payload.time);
@@ -371,6 +372,7 @@ export default function RoomPage() {
           </div>
         )}
       </div>
+
     </div>
   );
 }
