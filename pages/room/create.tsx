@@ -10,6 +10,7 @@ export default function CreateRoom() {
 	const [loading, setLoading] = useState(false);
 	const [title, setTitle] = useState("");
 	const [userId, setUserId] = useState<string | null>(null);
+const [totalRounds, setTotalRounds] = useState<number>(3);
 
 	useEffect(() => {
 		supabase.auth.getSession().then(({ data }) => {
@@ -26,7 +27,11 @@ export default function CreateRoom() {
 		const res = await fetch("/api/room/create", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ title, user_id: userId }),
+    body: JSON.stringify({
+      title,
+      user_id: userId,
+      total_rounds: totalRounds, // 👈 ADD THIS LINE
+    }),
 		});
 
 		const json = await res.json(); //hello
@@ -48,6 +53,41 @@ export default function CreateRoom() {
 			<Button onClick={createRoom} disabled={loading}>
 				{loading ? "Creating..." : "Create Room"}
 			</Button>
+			<label className="text-sm text-gray-400 mb-1">
+  Number of Rounds
+</label>
+
+<input
+  type="number"
+  min={1}
+  max={10}
+  step={1}
+  value={totalRounds}
+  onChange={(e) => {
+    const value = Number(e.target.value);
+
+    // hard clamp (extra safety)
+    if (Number.isNaN(value)) return;
+    if (value < 1) return setTotalRounds(1);
+    if (value > 10) return setTotalRounds(10);
+
+    setTotalRounds(value);
+  }}
+  className="
+    w-24
+    bg-[#FFFFFF]
+    border border-gray-700
+    rounded-xl
+    px-4 py-2
+    text-center
+    text-lg
+    focus:outline-none
+    focus:ring-2
+    focus:ring-indigo-500
+  "
+/>
+
 		</div>
+		
 	);
 }
