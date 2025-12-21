@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -16,82 +15,87 @@ export default async function handler(
     return res.status(400).json({ error: "Missing room_id or user_id" });
   }
 
-  // 1️⃣ Check host permission
-  const { data: player } = await supabaseAdmin
+  /* ---------------- HOST CHECK ---------------- */
+  const { data: hostRow } = await supabaseAdmin
     .from("room_players")
     .select("is_host")
     .eq("room_id", room_id)
     .eq("user_id", user_id)
     .single();
 
-  if (!player || !player.is_host) {
-    return res.status(403).json({ error: "Only host can start the battle" });
+  if (!hostRow?.is_host) {
+    return res.status(403).json({ error: "Only host can start the round" });
   }
 
-  // 2️⃣ Check readiness
-  const { data: players } = await supabaseAdmin
-    .from("room_players")
-    .select("is_ready, is_host")
-    .eq("room_id", room_id);
+  /* ---------------- ROOM STATE ---------------- */
+  const { data: room } = await supabaseAdmin
+    .from("rooms")
+    .select("current_round, total_rounds")
+    .eq("id", room_id)
+    .single();
 
-  const nonHostPlayers = players.filter((p) => !p.is_host);
-  const allReady = nonHostPlayers.every((p) => p.is_ready);
-
-  if (!allReady) {
-    return res.status(400).json({
-      error: "All non-host players must be ready before starting",
-    });
+  if (!room) {
+    return res.status(404).json({ error: "Room not found" });
   }
 
-  // 3️⃣ Pick random image
-  const { data: images } = await supabaseAdmin.from("images").select("*");
+  if (room.current_round > room.total_rounds) {
+    return res.status(400).json({ error: "Game already finished" });
+  }
 
-  const randomImage = images[Math.floor(Math.random() * images.length)];
+  /* ---------------- READINESS (ONLY ROUND 1) ---------------- */
+  if (room.current_round === 1) {
+    const { data: players } = await supabaseAdmin
+      .from("room_players")
+      .select("is_ready, is_host")
+      .eq("room_id", room_id);
 
-  // 4️⃣ Create new round
-  const { data: roundData, error: roundErr } = await supabaseAdmin
+    const nonHostPlayers = players?.filter((p) => !p.is_host) ?? [];
+    const allReady =
+      nonHostPlayers.length === 0 ||
+      nonHostPlayers.every((p) => p.is_ready);
+
+    if (!allReady) {
+      return res.status(400).json({
+        error: "All non-host players must be ready before starting",
+      });
+    }
+  }
+
+  /* ---------------- RANDOM IMAGE ---------------- */
+  const { data: images } = await supabaseAdmin
+    .from("images")
+    .select("id, url");
+
+  const randomImage = images![Math.floor(Math.random() * images!.length)];
+
+  /* ---------------- CREATE ROUND ---------------- */
+  const { data: round } = await supabaseAdmin
     .from("rounds")
     .insert({
       room_id,
+      round_number: room.current_round,
       image_id: randomImage.id,
     })
     .select()
     .single();
 
-  if (roundErr) {
-    return res.status(400).json({ error: roundErr.message });
-  }
-
-  // 5️⃣ Update room status
-  await supabaseAdmin
-    .from("rooms")
-    .update({ status: "submission" })
-    .eq("id", room_id);
-
-  // 6️⃣ Realtime broadcast (FIXED)
-  const realtime = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
-  const channel = realtime.channel(`room-phase-${room_id}`);
-  await channel.subscribe();
-
-  await channel.send({
+  /* ---------------- BROADCAST PHASE ---------------- */
+  await supabaseAdmin.channel(`room-phase-${room_id}`).send({
     type: "broadcast",
     event: "phase_update",
     payload: {
       phase: "submission",
-      time: 30,
+      time: 60,
       image_url: randomImage.url,
-      round_id: roundData.id,
+      round_id: round.id,
+      round_number: room.current_round,
     },
   });
 
-  // 7️⃣ Response
   return res.status(200).json({
-    message: "Battle started",
-    round_id: roundData.id,
+    success: true,
+    round_id: round.id,
+    round_number: room.current_round,
     image_url: randomImage.url,
   });
 }

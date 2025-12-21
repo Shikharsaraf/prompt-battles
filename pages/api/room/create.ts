@@ -13,17 +13,23 @@ function generateRoomCode() {
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse
+  res: NextApiResponse,
 ) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { title, user_id } = req.body;
+  const { title, user_id, total_rounds } = req.body;
 
   if (!title || !user_id) {
     return res.status(400).json({ error: "Missing title or user_id" });
   }
+
+  // ✅ Clamp total_rounds (server‑side safety)
+  const rounds =
+    typeof total_rounds === "number"
+      ? Math.min(10, Math.max(1, total_rounds))
+      : 3;
 
   let roomId: string | null = null;
   const now = new Date().toISOString();
@@ -38,6 +44,8 @@ export default async function handler(
         id: roomCode,
         title,
         host_id: user_id,
+        current_round: 1,
+        total_rounds: rounds, // 👈 IMPORTANT LINE
         created_at: now,
       })
       .select()
